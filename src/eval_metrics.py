@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import wandb
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import precision_recall_fscore_support
@@ -46,15 +47,17 @@ def eval_mosei_senti(results, truths, exclude_zero=False):
     f_score = f1_score((test_preds[non_zeros] > 0), (test_truth[non_zeros] > 0), average='weighted')
     binary_truth = (test_truth[non_zeros] > 0)
     binary_preds = (test_preds[non_zeros] > 0)
+    acc = accuracy_score(binary_truth, binary_preds)
 
     print("MAE: ", mae)
     print("Correlation Coefficient: ", corr)
     print("mult_acc_7: ", mult_a7)
     print("mult_acc_5: ", mult_a5)
     print("F1 score: ", f_score)
-    print("Accuracy: ", accuracy_score(binary_truth, binary_preds))
+    print("Accuracy: ", acc)
 
     print("-" * 50)
+    wandb.log({"MAE": mae, "Correlation Coeff": corr, "F1": f_score, "Accuracy": acc, "mult_acc_5": mult_a5, "mult_acc_7": mult_a7})
 
 
 def eval_mosi(results, truths, exclude_zero=False):
@@ -86,6 +89,7 @@ def eval_iemocap(results, truths, single=-1):
         acc = accuracy_score(test_truth_i, test_preds_i)
         print("  - F1 Score: ", f1)
         print("  - Accuracy: ", acc)
+    wandb.log({"F1": f1, "Accuracy": acc})
 
 
 

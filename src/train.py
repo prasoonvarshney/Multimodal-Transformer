@@ -10,6 +10,7 @@ import time
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import os
 import pickle
+import wandb
 
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
@@ -233,13 +234,15 @@ def train_model(settings, hyp_params, train_loader, valid_loader, test_loader):
     best_valid = 1e8
     for epoch in range(1, hyp_params.num_epochs+1):
         start = time.time()
-        train(model, optimizer, criterion, ctc_a2l_module, ctc_v2l_module, ctc_a2l_optimizer, ctc_v2l_optimizer, ctc_criterion)
+        train_loss = train(model, optimizer, criterion, ctc_a2l_module, ctc_v2l_module, ctc_a2l_optimizer, ctc_v2l_optimizer, ctc_criterion)
         val_loss, _, _ = evaluate(model, ctc_a2l_module, ctc_v2l_module, criterion, test=False)
         test_loss, _, _ = evaluate(model, ctc_a2l_module, ctc_v2l_module, criterion, test=True)
         
         end = time.time()
         duration = end-start
         scheduler.step(val_loss)    # Decay learning rate by validation loss
+
+        wandb.log({"train_loss": train_loss, "val_loss": val_loss, "test_loss": test_loss}, step=epoch)
 
         print("-"*50)
         print('Epoch {:2d} | Time {:5.4f} sec | Valid Loss {:5.4f} | Test Loss {:5.4f}'.format(epoch, duration, val_loss, test_loss))
@@ -260,5 +263,5 @@ def train_model(settings, hyp_params, train_loader, valid_loader, test_loader):
     elif hyp_params.dataset == 'iemocap':
         eval_iemocap(results, truths)
 
-    sys.stdout.flush()
-    input('[Press Any Key to start another run]')
+    # sys.stdout.flush()
+    # input('[Press Any Key to start another run]')

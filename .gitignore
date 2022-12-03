@@ -1,0 +1,4 @@
+**/__pycache__/**
+pre_trained_models/**
+data/**
+wandb/**

@@ -17,7 +17,7 @@ else:
 
 
 class Multimodal_Datasets(Dataset):
-    def __init__(self, dataset_path, data='mosei_senti', split_type='train', if_align=False):
+    def __init__(self, dataset_path, data='mosei_senti', split_type='train', if_align=False, trunc_factor=None):
         super(Multimodal_Datasets, self).__init__()
         dataset_path = os.path.join(dataset_path, data+'_data.pkl' if if_align else data+'_data_noalign.pkl' )
         dataset = pickle.load(open(dataset_path, 'rb'))
@@ -32,10 +32,23 @@ class Multimodal_Datasets(Dataset):
         
         # Note: this is STILL an numpy array
         self.meta = dataset[split_type]['id'] if 'id' in dataset[split_type].keys() else None
+
+        if trunc_factor is not None: 
+            print(f"Truncating {split_type} dataset from {len(self.text)} to length: {len(self.text) // trunc_factor} for debugging")
+            print(self.text.shape)
+            self.text = self.text[:len(self.text) // trunc_factor]
+            print(self.text.shape)
+            self.audio = self.audio[:len(self.audio) // trunc_factor]
+            self.vision = self.vision[:len(self.vision) // trunc_factor]
+            self.labels = self.labels[:len(self.labels) // trunc_factor]
+        assert self.text.shape[0] == self.audio.shape[0]
+        assert self.text.shape[0] == self.vision.shape[0]
+        assert self.text.shape[0] == self.labels.shape[0]
        
         self.data = data
         
         self.n_modalities = 3 # vision/ text/ audio
+
     def get_n_modalities(self):
         return self.n_modalities
     def get_seq_len(self):

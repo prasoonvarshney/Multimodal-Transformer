@@ -3,6 +3,7 @@ import argparse
 from src.utils import *
 from torch.utils.data import DataLoader
 from src import train
+import wandb
 
 
 parser = argparse.ArgumentParser(description='MOSEI Sentiment Analysis')
@@ -23,7 +24,7 @@ parser.add_argument('--aligned', action='store_true',
                     help='consider aligned experiment or not (default: False)')
 parser.add_argument('--dataset', type=str, default='mosei_senti',
                     help='dataset to use (default: mosei_senti)')
-parser.add_argument('--data_path', type=str, default='data',
+parser.add_argument('--data_path', type=str, default='./data',
                     help='path for storing the dataset')
 
 # Dropouts
@@ -59,7 +60,7 @@ parser.add_argument('--lr', type=float, default=1e-3,
                     help='initial learning rate (default: 1e-3)')
 parser.add_argument('--optim', type=str, default='Adam',
                     help='optimizer to use (default: Adam)')
-parser.add_argument('--num_epochs', type=int, default=40,
+parser.add_argument('--num_epochs', type=int, default=10,
                     help='number of epochs (default: 40)')
 parser.add_argument('--when', type=int, default=20,
                     help='when to decay learning rate (default: 20)')
@@ -75,7 +76,19 @@ parser.add_argument('--no_cuda', action='store_true',
                     help='do not use cuda')
 parser.add_argument('--name', type=str, default='mult',
                     help='name of the trial (default: "mult")')
+parser.add_argument('--trunc', action='store_true', default=False,
+                    help='truncate dataset for debugging')
+parser.add_argument('--wandb', default=True, action="store_true")
 args = parser.parse_args()
+
+if args.wandb: 
+    wandb_logging = True
+    wandb.init(
+        project="MulTransformer", 
+        entity="specteross", 
+        config=args,
+        name=f"{args.model} {args.dataset} {'a' if args.aligned else 'na'} {'l_only' if args.lonly else ''} {'a_only' if args.aonly else ''} {'v_only' if args.vonly else ''} {'trunc' if args.trunc else ''}"
+    )
 
 torch.manual_seed(args.seed)
 dataset = str.lower(args.dataset.strip())
@@ -98,11 +111,13 @@ criterion_dict = {
     'iemocap': 'CrossEntropyLoss'
 }
 
+
 torch.set_default_tensor_type('torch.FloatTensor')
 if torch.cuda.is_available():
     if args.no_cuda:
         print("WARNING: You have a CUDA device, so you should probably not run with --no_cuda")
     else:
+        print(f"Using CUDA device and setting torch seed to {args.seed}")
         torch.cuda.manual_seed(args.seed)
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
         use_cuda = True
@@ -120,8 +135,8 @@ valid_data = get_data(args, dataset, 'valid')
 test_data = get_data(args, dataset, 'test')
    
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
-valid_loader = DataLoader(valid_data, batch_size=args.batch_size, shuffle=True)
-test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=True)
+valid_loader = DataLoader(valid_data, batch_size=args.batch_size, shuffle=False)
+test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False)
 
 print('Finish loading the data....')
 if not args.aligned:
