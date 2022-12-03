@@ -20,8 +20,13 @@ class TransformerEncoder(nn.Module):
         attn_mask (bool): whether to apply mask on the attention weights
     """
 
-    def __init__(self, embed_dim, num_heads, layers, attn_dropout=0.0, relu_dropout=0.0, res_dropout=0.0,
-                 embed_dropout=0.0, attn_mask=False):
+    def __init__(
+        self, embed_dim, num_heads, layers, 
+        attn_dropout=0.0, relu_dropout=0.0, res_dropout=0.0,
+        embed_dropout=0.0, attn_mask=False, 
+        # Bottleneck fusion related args
+        use_bottleneck=False, n_bottlenecks=4, fusion_layer=2, test_with_bottlenecks=False
+    ):
         super().__init__()
         self.dropout = embed_dropout      # Embedding dropout
         self.attn_dropout = attn_dropout
@@ -46,8 +51,17 @@ class TransformerEncoder(nn.Module):
         if self.normalize:
             self.layer_norm = LayerNorm(embed_dim)
 
-    def forward(self, x_in, x_in_k = None, x_in_v = None):
+        self.use_bottleneck = use_bottleneck
+        self.n_bottlenecks = n_bottlenecks
+        self.fusion_layer = fusion_layer
+        self.test_with_bottlenecks = test_with_bottlenecks
+        self.bottleneck = None
+        # print(f"Total encoder layers = {len(self.layers)}, use bottleneck: {self.use_bottleneck}, fusion starts at layer {self.fusion_layer}")
+
+    def forward(self, x_in, x_in_k = None, x_in_v = None, bottleneck = None):
         """
+        x_in is will usually come in from one modality, and x_in_k and x_in_v form keys and values from another
+
         Args:
             x_in (FloatTensor): embedded input of shape `(src_len, batch, embed_dim)`
             x_in_k (FloatTensor): embedded input of shape `(src_len, batch, embed_dim)`
@@ -60,6 +74,7 @@ class TransformerEncoder(nn.Module):
                   padding elements of shape `(batch, src_len)`
         """
         # embed tokens and positions
+        seq_length = x_in.size(0)
         x = self.embed_scale * x_in
         if self.embed_positions is not None:
             x += self.embed_positions(x_in.transpose(0, 1)[:, :, 0]).transpose(0, 1)   # Add positional embedding
@@ -67,6 +82,7 @@ class TransformerEncoder(nn.Module):
 
         if x_in_k is not None and x_in_v is not None:
             # embed tokens and positions    
+            seq_length_k = x_in_k.size(0)
             x_k = self.embed_scale * x_in_k
             x_v = self.embed_scale * x_in_v
             if self.embed_positions is not None:
@@ -77,9 +93,46 @@ class TransformerEncoder(nn.Module):
         
         # encoder layers
         intermediates = [x]
-        for layer in self.layers:
+        for layer_num, layer in enumerate(self.layers):
             if x_in_k is not None and x_in_v is not None:
-                x = layer(x, x_k, x_v)
+                # We have 3 modalities
+                if self.use_bottleneck:
+                    # Bottlenecked cross-modal attention fusion
+                    if layer_num >= self.fusion_layer:
+                        ## Approach 1: Perform bottlenecked fusion, as in paper (??)
+                        ## Note that x, and x_k/x_v are in this case not allowed to directly interact with each other, 
+                        ## instead through the bottleneck, so layer(x, x_k, x_v) changes
+                        x_k_mod = torch.cat([x_k, bottleneck])
+                        interm_k = layer(x_k_mod, bottleneck, bottleneck)
+                        x_k = interm_k[:seq_length_k, :, :]
+                        x_mod = torch.cat([x, bottleneck])
+                        out_mod = layer(x_mod, bottleneck, bottleneck)
+                        x = out_mod[:seq_length, :, :]
+
+                        ## Update bottleneck nodes
+                        bottleneck = torch.mean(torch.stack([interm_k[seq_length_k:, :, :], out_mod[seq_length:, :, :]], axis=-1), axis=-1) 
+                        # self.bottleneck[str(layer_num)] = torch.mean(
+                        #     torch.stack([self.bottleneck[str(layer_num)], bottleneck], axis=-1), 
+                        #     axis=-1
+                        # )
+                        # if str(layer_num) not in self.shared_bottlenecks_by_layer: 
+                        #     self.shared_bottlenecks_by_layer[str(layer_num)] = bottleneck
+                        # else: 
+                        #     self.shared_bottlenecks_by_layer[str(layer_num)] = torch.mean(
+                        #         torch.stack([self.shared_bottlenecks_by_layer[str(layer_num)], bottleneck], axis=-1), 
+                        #         axis=-1
+                        #     )
+
+                        # Approach 2: randomly concocted by Prasoon, can benchmark
+                        # bottleneck = self.bottleneck.tile((batch_size, 1, 1))
+                        # bottleneck = bottleneck.transpose(0, 1)
+                        # contextualized_bottleneck = layer(bottleneck, x_k, x_v)
+                        # x = layer(x, contextualized_bottleneck, contextualized_bottleneck)  # cross-modal attention
+                    else: 
+                        x = layer(x)  # self-attention; ignore other modality
+                else:
+                    # Normal cross-modal attention fusion
+                    x = layer(x, x_k, x_v)
             else:
                 x = layer(x)
             intermediates.append(x)

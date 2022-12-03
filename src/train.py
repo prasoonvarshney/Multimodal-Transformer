@@ -18,7 +18,6 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score, f1_score
 from src.eval_metrics import *
 
-
 ####################################################################
 #
 # Construct the model and the CTC module (which may not be needed)
@@ -242,7 +241,8 @@ def train_model(settings, hyp_params, train_loader, valid_loader, test_loader):
         duration = end-start
         scheduler.step(val_loss)    # Decay learning rate by validation loss
 
-        wandb.log({"train_loss": train_loss, "val_loss": val_loss, "test_loss": test_loss}, step=epoch)
+        if hyp_params.wandb: 
+            wandb.log({"train_loss": train_loss, "val_loss": val_loss, "test_loss": test_loss}, step=epoch)
 
         print("-"*50)
         print('Epoch {:2d} | Time {:5.4f} sec | Valid Loss {:5.4f} | Test Loss {:5.4f}'.format(epoch, duration, val_loss, test_loss))
@@ -257,11 +257,11 @@ def train_model(settings, hyp_params, train_loader, valid_loader, test_loader):
     _, results, truths = evaluate(model, ctc_a2l_module, ctc_v2l_module, criterion, test=True)
 
     if hyp_params.dataset == "mosei_senti":
-        eval_mosei_senti(results, truths, True)
+        eval_mosei_senti(results, truths, True, wandb_logging=hyp_params.wandb)
     elif hyp_params.dataset == 'mosi':
-        eval_mosi(results, truths, True)
+        eval_mosi(results, truths, True, wandb_logging=hyp_params.wandb)
     elif hyp_params.dataset == 'iemocap':
-        eval_iemocap(results, truths)
+        eval_iemocap(results, truths, wandb_logging=hyp_params.wandb)
 
     # sys.stdout.flush()
     # input('[Press Any Key to start another run]')

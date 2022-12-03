@@ -29,7 +29,7 @@ def weighted_accuracy(test_preds_emo, test_truth_emo):
     return (tp * (n/p) +tn) / (2*n)
 
 
-def eval_mosei_senti(results, truths, exclude_zero=False):
+def eval_mosei_senti(results, truths, exclude_zero=False, wandb_logging=False):
     test_preds = results.view(-1).cpu().detach().numpy()
     test_truth = truths.view(-1).cpu().detach().numpy()
 
@@ -57,14 +57,16 @@ def eval_mosei_senti(results, truths, exclude_zero=False):
     print("Accuracy: ", acc)
 
     print("-" * 50)
-    wandb.log({"MAE": mae, "Correlation Coeff": corr, "F1": f_score, "Accuracy": acc, "mult_acc_5": mult_a5, "mult_acc_7": mult_a7})
+    
+    if wandb_logging: 
+        wandb.log({"MAE": mae, "Correlation Coeff": corr, "F1": f_score, "Accuracy": acc, "mult_acc_5": mult_a5, "mult_acc_7": mult_a7})
 
 
-def eval_mosi(results, truths, exclude_zero=False):
-    return eval_mosei_senti(results, truths, exclude_zero)
+def eval_mosi(results, truths, exclude_zero=False, wandb_logging=False):
+    return eval_mosei_senti(results, truths, exclude_zero, wandb_logging=wandb_logging)
 
 
-def eval_iemocap(results, truths, single=-1):
+def eval_iemocap(results, truths, single=-1, wandb_logging=False):
     emos = ["Neutral", "Happy", "Sad", "Angry"]
     if single < 0:
         test_preds = results.view(-1, 4, 2).cpu().detach().numpy()
@@ -89,7 +91,9 @@ def eval_iemocap(results, truths, single=-1):
         acc = accuracy_score(test_truth_i, test_preds_i)
         print("  - F1 Score: ", f1)
         print("  - Accuracy: ", acc)
-    wandb.log({"F1": f1, "Accuracy": acc})
+
+    if wandb_logging: 
+        wandb.log({"F1": f1, "Accuracy": acc})
 
 
 

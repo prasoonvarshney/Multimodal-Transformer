@@ -50,6 +50,14 @@ parser.add_argument('--num_heads', type=int, default=5,
                     help='number of heads for the transformer network (default: 5)')
 parser.add_argument('--attn_mask', action='store_false',
                     help='use attention mask for Transformer (default: true)')
+parser.add_argument('--use_bottleneck', action='store_true', default=False, 
+                    help='use bottlenecked attention fusion (default: false)')
+parser.add_argument('--n_bottlenecks', type=int, default=4,
+                    help='bottleneck size (default: 4)')
+parser.add_argument('--fusion_layer', type=int, default=2,
+                    help='Layer at which to start fusion (default: 2)')
+parser.add_argument('--test_with_bottlenecks', action='store_false', default=True, 
+                    help='use attention mask for Transformer (default: true)')
 
 # Tuning
 parser.add_argument('--batch_size', type=int, default=24, metavar='N',
@@ -78,16 +86,26 @@ parser.add_argument('--name', type=str, default='mult',
                     help='name of the trial (default: "mult")')
 parser.add_argument('--trunc', action='store_true', default=False,
                     help='truncate dataset for debugging')
-parser.add_argument('--wandb', default=True, action="store_true")
+parser.add_argument('--wandb', default=False, action="store_true")
 args = parser.parse_args()
 
+if not args.use_bottleneck:
+    args.test_with_bottlenecks = False
+
+experiment_name = (
+    f"{args.model} {args.dataset} {'a' if args.aligned else 'na'} " + 
+    (f"bottleneck-n{args.n_bottlenecks}-l{args.fusion_layer}-t{args.nlevels}" if args.use_bottleneck else '') + 
+    f"{'l_only' if args.lonly else ''} {'a_only' if args.aonly else ''} {'v_only' if args.vonly else ''} " + 
+    f"{'trunc' if args.trunc else ''}"
+)
+print(f"Starting experiment {experiment_name}")
 if args.wandb: 
     wandb_logging = True
     wandb.init(
         project="MulTransformer", 
         entity="specteross", 
         config=args,
-        name=f"{args.model} {args.dataset} {'a' if args.aligned else 'na'} {'l_only' if args.lonly else ''} {'a_only' if args.aonly else ''} {'v_only' if args.vonly else ''} {'trunc' if args.trunc else ''}"
+        name=experiment_name
     )
 
 torch.manual_seed(args.seed)
