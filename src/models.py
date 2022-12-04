@@ -29,7 +29,7 @@ class MULTModel(nn.Module):
         self.use_bottleneck = hyp_params.use_bottleneck
         self.n_bottlenecks = hyp_params.n_bottlenecks
         self.fusion_layer = hyp_params.fusion_layer
-        self.test_with_bottlenecks = hyp_params.test_with_bottlenecks
+        # self.test_with_bottlenecks = hyp_params.test_with_bottlenecks
         self.batch_size = hyp_params.batch_size
 
         self.bottleneck_l = None
@@ -110,7 +110,7 @@ class MULTModel(nn.Module):
             use_bottleneck=self.use_bottleneck, 
             n_bottlenecks=self.n_bottlenecks, 
             fusion_layer=self.fusion_layer, 
-            test_with_bottlenecks=self.test_with_bottlenecks
+            # test_with_bottlenecks=self.test_with_bottlenecks
         )
             
     def forward(self, x_l, x_a, x_v):
@@ -133,19 +133,18 @@ class MULTModel(nn.Module):
         # print(f"Shapes after Conv1D: proj_x_a: {proj_x_a.shape}, proj_x_v: {proj_x_v.shape}, proj_x_l: {proj_x_l.shape}")
         # Dimensions at this point are permuted to be [seq_len, batch_size, n_features]
 
-        if self.use_bottleneck:
-            # Init bottleneck units
-            bottleneck_l = torch.normal(0.0, 0.02, (1, self.n_bottlenecks, self.d_l))
-            bottleneck_a = torch.normal(0.0, 0.02, (1, self.n_bottlenecks, self.d_a))
-            bottleneck_v = torch.normal(0.0, 0.02, (1, self.n_bottlenecks, self.d_v))
-            # Replicate across batch_size
-            bottleneck_l = bottleneck_l.tile((proj_x_l.shape[1], 1, 1)).transpose(0, 1)
-            bottleneck_a = bottleneck_a.tile((proj_x_a.shape[1], 1, 1)).transpose(0, 1)
-            bottleneck_v = bottleneck_v.tile((proj_x_v.shape[1], 1, 1)).transpose(0, 1)
-            self.bottleneck_l = nn.Parameter(data=bottleneck_l).cuda()
-            self.bottleneck_a = nn.Parameter(data=bottleneck_a).cuda()
-            self.bottleneck_v = nn.Parameter(data=bottleneck_v).cuda()
-
+        # if self.use_bottleneck:
+        #     # Init bottleneck units
+        #     bottleneck_l = torch.normal(0.0, 0.02, (1, self.n_bottlenecks, self.d_l))
+        #     bottleneck_a = torch.normal(0.0, 0.02, (1, self.n_bottlenecks, self.d_a))
+        #     bottleneck_v = torch.normal(0.0, 0.02, (1, self.n_bottlenecks, self.d_v))
+        #     # Replicate across batch_size
+        #     bottleneck_l = bottleneck_l.tile((proj_x_l.shape[1], 1, 1)).transpose(0, 1)
+        #     bottleneck_a = bottleneck_a.tile((proj_x_a.shape[1], 1, 1)).transpose(0, 1)
+        #     bottleneck_v = bottleneck_v.tile((proj_x_v.shape[1], 1, 1)).transpose(0, 1)
+        #     self.bottleneck_l = nn.Parameter(data=bottleneck_l).cuda()
+        #     self.bottleneck_a = nn.Parameter(data=bottleneck_a).cuda()
+        #     self.bottleneck_v = nn.Parameter(data=bottleneck_v).cuda()
         if self.lonly:
             # (V,A) --> L
             h_l_with_as = self.trans_l_with_a(proj_x_l, proj_x_a, proj_x_a, self.bottleneck_l)    # Dimension (L, N, d_l)

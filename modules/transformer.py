@@ -2,7 +2,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from modules.position_embedding import SinusoidalPositionalEmbedding
-from modules.multihead_attention import MultiheadAttention
 import math
 
 
@@ -25,7 +24,8 @@ class TransformerEncoder(nn.Module):
         attn_dropout=0.0, relu_dropout=0.0, res_dropout=0.0,
         embed_dropout=0.0, attn_mask=False, 
         # Bottleneck fusion related args
-        use_bottleneck=False, n_bottlenecks=4, fusion_layer=2, test_with_bottlenecks=False
+        use_bottleneck=False, n_bottlenecks=4, fusion_layer=2, 
+        normalize=True, self_attention_only=False
     ):
         super().__init__()
         self.dropout = embed_dropout      # Embedding dropout
@@ -47,15 +47,16 @@ class TransformerEncoder(nn.Module):
             self.layers.append(new_layer)
 
         self.register_buffer('version', torch.Tensor([2]))
-        self.normalize = True
+        self.normalize = normalize
+        self.self_attention_only = self_attention_only
         if self.normalize:
-            self.layer_norm = LayerNorm(embed_dim)
+            print("LayerNorm after encoder block is on")
+            self.layer_norm = nn.LayerNorm(embed_dim)
 
         self.use_bottleneck = use_bottleneck
         self.n_bottlenecks = n_bottlenecks
         self.fusion_layer = fusion_layer
-        self.test_with_bottlenecks = test_with_bottlenecks
-        self.bottleneck = None
+        # self.test_with_bottlenecks = test_with_bottlenecks
         # print(f"Total encoder layers = {len(self.layers)}, use bottleneck: {self.use_bottleneck}, fusion starts at layer {self.fusion_layer}")
 
     def forward(self, x_in, x_in_k = None, x_in_v = None, bottleneck = None):
@@ -94,7 +95,7 @@ class TransformerEncoder(nn.Module):
         # encoder layers
         intermediates = [x]
         for layer_num, layer in enumerate(self.layers):
-            if x_in_k is not None and x_in_v is not None:
+            if x_in_k is not None and x_in_v is not None and not self.self_attention_only:
                 # We have 3 modalities
                 if self.use_bottleneck:
                     # Bottlenecked cross-modal attention fusion
@@ -103,25 +104,14 @@ class TransformerEncoder(nn.Module):
                         ## Note that x, and x_k/x_v are in this case not allowed to directly interact with each other, 
                         ## instead through the bottleneck, so layer(x, x_k, x_v) changes
                         x_k_mod = torch.cat([x_k, bottleneck])
-                        interm_k = layer(x_k_mod, bottleneck, bottleneck)
+                        interm_k = layer(x_k_mod)
                         x_k = interm_k[:seq_length_k, :, :]
                         x_mod = torch.cat([x, bottleneck])
-                        out_mod = layer(x_mod, bottleneck, bottleneck)
+                        out_mod = layer(x_mod)
                         x = out_mod[:seq_length, :, :]
 
                         ## Update bottleneck nodes
                         bottleneck = torch.mean(torch.stack([interm_k[seq_length_k:, :, :], out_mod[seq_length:, :, :]], axis=-1), axis=-1) 
-                        # self.bottleneck[str(layer_num)] = torch.mean(
-                        #     torch.stack([self.bottleneck[str(layer_num)], bottleneck], axis=-1), 
-                        #     axis=-1
-                        # )
-                        # if str(layer_num) not in self.shared_bottlenecks_by_layer: 
-                        #     self.shared_bottlenecks_by_layer[str(layer_num)] = bottleneck
-                        # else: 
-                        #     self.shared_bottlenecks_by_layer[str(layer_num)] = torch.mean(
-                        #         torch.stack([self.shared_bottlenecks_by_layer[str(layer_num)], bottleneck], axis=-1), 
-                        #         axis=-1
-                        #     )
 
                         # Approach 2: randomly concocted by Prasoon, can benchmark
                         # bottleneck = self.bottleneck.tile((batch_size, 1, 1))
@@ -168,10 +158,10 @@ class TransformerEncoderLayer(nn.Module):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         
-        self.self_attn = MultiheadAttention(
+        self.self_attn = nn.MultiheadAttention(
             embed_dim=self.embed_dim,
             num_heads=self.num_heads,
-            attn_dropout=attn_dropout
+            dropout=attn_dropout
         )
         self.attn_mask = attn_mask
 
@@ -181,7 +171,7 @@ class TransformerEncoderLayer(nn.Module):
 
         self.fc1 = Linear(self.embed_dim, 4*self.embed_dim)   # The "Add & Norm" part in the paper
         self.fc2 = Linear(4*self.embed_dim, self.embed_dim)
-        self.layer_norms = nn.ModuleList([LayerNorm(self.embed_dim) for _ in range(2)])
+        self.layer_norms = nn.ModuleList([nn.LayerNorm(self.embed_dim) for _ in range(2)])
 
     def forward(self, x, x_k=None, x_v=None):
         """
@@ -205,7 +195,7 @@ class TransformerEncoderLayer(nn.Module):
             x, _ = self.self_attn(query=x, key=x_k, value=x_v, attn_mask=mask)
         x = F.dropout(x, p=self.res_dropout, training=self.training)
         x = residual + x
-        x = self.maybe_layer_norm(0, x, after=True)
+        # x = self.maybe_layer_norm(0, x, after=True)
 
         residual = x
         x = self.maybe_layer_norm(1, x, before=True)
@@ -214,7 +204,7 @@ class TransformerEncoderLayer(nn.Module):
         x = self.fc2(x)
         x = F.dropout(x, p=self.res_dropout, training=self.training)
         x = residual + x
-        x = self.maybe_layer_norm(1, x, after=True)
+        # x = self.maybe_layer_norm(1, x, after=True)
         return x
 
     def maybe_layer_norm(self, i, x, before=False, after=False):
@@ -244,11 +234,6 @@ def Linear(in_features, out_features, bias=True):
     nn.init.xavier_uniform_(m.weight)
     if bias:
         nn.init.constant_(m.bias, 0.)
-    return m
-
-
-def LayerNorm(embedding_dim):
-    m = nn.LayerNorm(embedding_dim)
     return m
 
 

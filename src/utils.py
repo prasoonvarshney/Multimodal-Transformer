@@ -5,7 +5,7 @@ from src.dataset import Multimodal_Datasets
 
 def get_data(args, dataset, split='train'):
     alignment = 'a' if args.aligned else 'na'
-    trunc_factor = 20 if args.trunc else None
+    trunc_factor = 50 if args.trunc else None
     data_path = os.path.join(args.data_path, dataset) + f"_{split}_{alignment}{('_trunc'+str(trunc_factor)) if args.trunc else ''}.dt"
     if not os.path.exists(data_path):
         print(f"  - Creating new {split} data")

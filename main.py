@@ -3,8 +3,20 @@ import argparse
 from src.utils import *
 from torch.utils.data import DataLoader
 from src import train
+import random
+import numpy as np
 import wandb
 
+
+def seed_everything(seed: int):
+    print(f"Setting random seed to {args.seed}")
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 parser = argparse.ArgumentParser(description='MOSEI Sentiment Analysis')
 parser.add_argument('-f', default='', type=str)
@@ -56,8 +68,10 @@ parser.add_argument('--n_bottlenecks', type=int, default=4,
                     help='bottleneck size (default: 4)')
 parser.add_argument('--fusion_layer', type=int, default=2,
                     help='Layer at which to start fusion (default: 2)')
-parser.add_argument('--test_with_bottlenecks', action='store_false', default=True, 
+parser.add_argument('--normalize', action='store_false', default=True, 
                     help='use attention mask for Transformer (default: true)')
+parser.add_argument('--self_attention_only', action='store_true', default=False, 
+                    help='use attention mask for Transformer (default: false)')                    
 
 # Tuning
 parser.add_argument('--batch_size', type=int, default=24, metavar='N',
@@ -87,17 +101,23 @@ parser.add_argument('--name', type=str, default='mult',
 parser.add_argument('--trunc', action='store_true', default=False,
                     help='truncate dataset for debugging')
 parser.add_argument('--wandb', default=False, action="store_true")
+parser.add_argument('--experiment_name', type=str, default='')
 args = parser.parse_args()
 
 if not args.use_bottleneck:
     args.test_with_bottlenecks = False
 
-experiment_name = (
-    f"{args.model} {args.dataset} {'a' if args.aligned else 'na'} " + 
-    (f"bottleneck-n{args.n_bottlenecks}-l{args.fusion_layer}-t{args.nlevels}" if args.use_bottleneck else '') + 
-    f"{'l_only' if args.lonly else ''} {'a_only' if args.aonly else ''} {'v_only' if args.vonly else ''} " + 
-    f"{'trunc' if args.trunc else ''}"
-)
+seed_everything(args.seed)
+
+experiment_name = args.experiment_name
+if not len(experiment_name):
+    experiment_name = (
+        f"{args.model} {args.dataset} {'a' if args.aligned else 'na'} " + 
+        (f"bottleneck-n{args.n_bottlenecks}-l{args.fusion_layer}-t{args.nlevels}" if (args.use_bottleneck and not args.self_attention_only) else '') + 
+        ("self_attention" if args.self_attention_only else 'cm_attention') + ' '
+        f"{'l_only' if args.lonly else ''}{'a_only' if args.aonly else ''}{'v_only' if args.vonly else ''} " + 
+        f"{'trunc' if args.trunc else ''}"
+    )
 print(f"Starting experiment {experiment_name}")
 if args.wandb: 
     wandb_logging = True
@@ -108,7 +128,6 @@ if args.wandb:
         name=experiment_name
     )
 
-torch.manual_seed(args.seed)
 dataset = str.lower(args.dataset.strip())
 valid_partial_mode = args.lonly + args.vonly + args.aonly
 
@@ -135,8 +154,7 @@ if torch.cuda.is_available():
     if args.no_cuda:
         print("WARNING: You have a CUDA device, so you should probably not run with --no_cuda")
     else:
-        print(f"Using CUDA device and setting torch seed to {args.seed}")
-        torch.cuda.manual_seed(args.seed)
+        print(f"Using CUDA device...")
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
         use_cuda = True
 
@@ -152,7 +170,7 @@ train_data = get_data(args, dataset, 'train')
 valid_data = get_data(args, dataset, 'valid')
 test_data = get_data(args, dataset, 'test')
    
-train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
+train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False)
 valid_loader = DataLoader(valid_data, batch_size=args.batch_size, shuffle=False)
 test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False)
 

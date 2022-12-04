@@ -61,6 +61,8 @@ def eval_mosei_senti(results, truths, exclude_zero=False, wandb_logging=False):
     if wandb_logging: 
         wandb.log({"MAE": mae, "Correlation Coeff": corr, "F1": f_score, "Accuracy": acc, "mult_acc_5": mult_a5, "mult_acc_7": mult_a7})
 
+    return acc, f_score
+
 
 def eval_mosi(results, truths, exclude_zero=False, wandb_logging=False):
     return eval_mosei_senti(results, truths, exclude_zero, wandb_logging=wandb_logging)
@@ -95,5 +97,5 @@ def eval_iemocap(results, truths, single=-1, wandb_logging=False):
     if wandb_logging: 
         wandb.log({"F1": f1, "Accuracy": acc})
 
-
+    return acc, f1
 
