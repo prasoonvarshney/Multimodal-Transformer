@@ -23,7 +23,7 @@ def initiate(hyp_params, train_loader, valid_loader, test_loader):
                 'optimizer': optimizer,
                 'criterion': criterion,
                 'scheduler': scheduler}
-    print(settings)
+    # print(settings)
     return train_model(settings, hyp_params, train_loader, valid_loader, test_loader)
 
 def get_eval_metrics(hyp_params, results, truths, wandb_logging=False):
@@ -47,7 +47,7 @@ def train_model(settings, hyp_params, train_loader, valid_loader, test_loader):
     criterion = settings['criterion']        
     scheduler = settings['scheduler']
     
-    print(model)
+    # print(model)
 
     def train(model, optimizer, criterion):
         epoch_loss = 0

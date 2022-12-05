@@ -114,8 +114,9 @@ if not len(experiment_name):
     experiment_name = (
         f"{args.model} {args.dataset} {'a' if args.aligned else 'na'} " + 
         (f"bottleneck-n{args.n_bottlenecks}-l{args.fusion_layer}-t{args.nlevels}" if (args.use_bottleneck and not args.self_attention_only) else '') + 
-        ("self_attention" if args.self_attention_only else 'cm_attention') + ' '
+        ("self_attention" if args.self_attention_only else 'cm_attention') +
         f"{'l_only' if args.lonly else ''}{'a_only' if args.aonly else ''}{'v_only' if args.vonly else ''} " + 
+        f"{'normalize ' if args.normalize else ''}"
         f"{'trunc' if args.trunc else ''}"
     )
 print(f"Starting experiment {experiment_name}")
